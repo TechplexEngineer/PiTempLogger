@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html style="height: 100%;">
+	<head>
+
+	<!--
+
+	NOTE: This plugin will not be visible on public views of a channel.
+				If you intend to make your channel public, consider using the
+				MATLAB Visualization App to create your visualizations.
+
+	-->
+
+		<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+		<script type="text/javascript" src="//thingspeak.com/highcharts-3.0.8.js"></script>
+		<script type="text/javascript" src="//thingspeak.com/exporting.js"></script>
+
+		<style type="text/css">
+			body { background-color: white; height: 100%; margin: 0; padding: 0; }
+			#chart-container { width: 100%; height: 100%; display: block; position:absolute; bottom:0; top:0; left:0; right:0; margin: 5px 15px 15px 0; overflow: hidden; }
+		</style>
+		<script type="text/javascript">
+		var numPoints = 24 * 60; //24hrs * 60 mins per hour
+
+			// variables for the first series
+			var series_1_channel_id = 285986;
+			var series_1_field_number = 2; //Temperature Fahrenheit
+			var series_1_read_api_key = '4RBZ8ZF2WLDFYFFI';
+			var series_1_results = numPoints;
+			var series_1_color = '#d62020';
+
+			// variables for the second series
+			var series_2_channel_id = 285986;
+			var series_2_field_number = 3; //Relative Humidity
+			var series_2_read_api_key = '4RBZ8ZF2WLDFYFFI';
+			var series_2_results = numPoints;
+			var series_2_color = '#00aaff';
+
+			// chart title
+			var chart_title = 'Temperature & Humidity';
+			// y axis title
+			var y_axis_title = 'Temperature [F]';
+
+			// user's timezone offset
+			var my_offset = new Date().getTimezoneOffset();
+			// chart variable
+			var my_chart;
+
+			// when the document is ready
+			$(document).on('ready', function() {
+				// add a blank chart
+				addChart();
+				// add the first series
+				addSeries(series_1_channel_id, series_1_field_number, series_1_read_api_key, series_1_results, series_1_color, 0);
+				// add the second series
+				addSeries(series_2_channel_id, series_2_field_number, series_2_read_api_key, series_2_results, series_2_color, 1);
+			});
+
+			// add the base chart
+			function addChart() {
+				// variable for the local date in milliseconds
+				var localDate;
+
+				// specify the chart options
+				var chartOptions = {
+					chart: {
+						renderTo: 'chart-container',
+						defaultSeriesType: 'line',
+						backgroundColor: '#ffffff',
+						events: { }
+					},
+					title: { text: chart_title },
+					plotOptions: {
+						series: {
+							marker: { radius: 3 },
+							// animation: true,
+							step: false,
+							borderWidth: 0,
+							turboThreshold: 0
+						}
+					},
+					tooltip: {
+						// reformat the tooltips so that local times are displayed
+						formatter: function() {
+							var d = new Date(this.x + (my_offset*60000));
+							var n = (this.point.name === undefined) ? '' : '<br>' + this.point.name;
+							return this.series.name + ':<b>' + this.y + '</b>' + n + '<br>' + d.toDateString() + '<br>' + d.toTimeString();
+						}
+					},
+					legend: {
+						layout: 'vertical',
+						align: 'left',
+						x: 100,
+						verticalAlign: 'top',
+						y: 25,
+						floating: true,
+						backgroundColor: (Highcharts.theme && Highcharts.theme.legendBackgroundColor) || '#FFFFFF'
+					},
+					xAxis: {
+						type: 'datetime',
+						labels: {
+							format: '{value:%l:%M %P}',
+							rotation: 45,
+							align: 'left'
+						},
+						title: { text: 'Date' }
+					},
+					yAxis: [
+						{
+							title: { text: y_axis_title },
+							labels: {
+								format: '{value} &deg;F',
+								useHTML: true,
+								style: {
+									color: series_1_color
+								}
+							},
+						},{
+							title: { text: "Humidity" },
+							opposite: true,
+							labels: {
+								format: '{value}',
+								style: {
+										color: series_2_color
+								}
+							},
+						}
+					],
+					exporting: { enabled: true },
+					credits: {
+						text: '',
+					//   href: 'https://thingspeak.com/',
+					//   style: { color: '#D62020' }
+					}
+				};
+
+				// draw the chart
+				my_chart = new Highcharts.Chart(chartOptions);
+			}
+
+			// add a series to the chart
+			function addSeries(channel_id, field_number, api_key, results, color, yAxis=0) {
+				var field_name = 'field' + field_number;
+
+				// get the data with a webservice call
+				$.getJSON('https://api.thingspeak.com/channels/' + channel_id + '/fields/' + field_number + '.json?offset=0&round=2&results=' + results + '&api_key=' + api_key, function(data) {
+
+					// blank array for holding chart data
+					var chart_data = [];
+
+					// iterate through each feed
+					$.each(data.feeds, function() {
+						var point = new Highcharts.Point();
+						// set the proper values
+						var value = this[field_name];
+						point.x = getChartDate(this.created_at);
+						point.y = parseFloat(value);
+						// add location if possible
+						if (this.location) { point.name = this.location; }
+						// if a numerical value exists add it
+						if (!isNaN(parseInt(value))) { chart_data.push(point); }
+					});
+
+					// add the chart data
+					my_chart.addSeries({ data: chart_data, name: data.channel[field_name], color: color, yAxis:yAxis });
+				});
+			}
+
+			// converts date format from JSON
+			function getChartDate(d) {
+				// offset in minutes is converted to milliseconds and subtracted so that chart's x-axis is correct
+				return Date.parse(d) - (my_offset * 60000);
+			}
+
+		</script>
+
+
+
+</head>
+<body>
+	<div id="chart-container">
+		<img alt="Ajax loader" src="//thingspeak.com/assets/loader-transparent.gif" style="position: absolute; margin: auto; top: 0; left: 0; right: 0; bottom: 0;" />
+	</div>
+</body>
+</html>
